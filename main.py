@@ -38,13 +38,12 @@ def train_nn(input_layer_size, hidden_layer_size, num_labels, X, y):
 
 
 if __name__ == '__main__':
-    file_path = 'data/train.json'
-    cuisine_list, ingredients_list, X, y = load_train(file_path)
+    cuisine_list, ingredients_list, X, y = load_train()
 
     ingredients_count = len(ingredients_list)
     cuisines_count = len(cuisine_list)
 
-    train_nn(ingredients_count, ingredients_count//16, cuisines_count, X, y)
+    train_nn(ingredients_count, ingredients_count//8, cuisines_count, X, y)
 
     # print(len(cuisine_list))
     # print(len(ingredients_list))

@@ -1,4 +1,5 @@
 from numba import vectorize, jit, cuda, float64, int64, autojit
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 from timeit import default_timer as timer
@@ -21,7 +22,7 @@ def cgbt2(theta,X,y,input_layer_size,hidden_layer_size,num_labels,lamb,alpha,bet
     t0 = timer()
     dxPrev = -nnGrad(theta,input_layer_size,hidden_layer_size,num_labels,X,y,lamb)
     t = timer() - t0
-    print("cgbt2 b",t)
+    print("cgbt2 nnGrad",t)
 
     snPrev = dxPrev
     theta = np.matrix(theta).T
@@ -76,7 +77,7 @@ def cgbt2(theta,X,y,input_layer_size,hidden_layer_size,num_labels,lamb,alpha,bet
         theta += t*sn
         snPrev = sn
         dxPrev = dx
-        print('Iteration',i+1,' | Cost:',costNew)
+        print('Iteration',i+1,' | Cost:',costNew, time.strftime("%Y.%m.%d_%H:%M:%S"))
 
         t = timer() - t0
         print("cgbt2 for iteration", t)
@@ -199,15 +200,11 @@ def nnCost(nn_params,input_layer_size,hidden_layer_size,num_labels,X,y,lamb):
 
 # @jit
 def nnGrad(nn_params,input_layer_size,hidden_layer_size,num_labels,X,y,lamb):
-    t0 = timer()
     Theta1 = np.matrix(np.reshape(nn_params[:hidden_layer_size*(input_layer_size+1)],(hidden_layer_size,input_layer_size+1),order='F'))
     Theta2 = np.matrix(np.reshape(nn_params[hidden_layer_size*(input_layer_size+1):],(num_labels,hidden_layer_size+1),order='F'))
     
     Delta1 = np.zeros((hidden_layer_size,input_layer_size+1))
     Delta2 = np.zeros((num_labels,hidden_layer_size+1))
-
-    t = timer() - t0
-    print("nnGrad b", t)
 
     t0 = timer()
     for t in range(X.shape[0]):
@@ -234,8 +231,6 @@ def nnGrad(nn_params,input_layer_size,hidden_layer_size,num_labels,X,y,lamb):
     t = timer() - t0
     print("nnGrad m", t)
 
-    t0 = timer()
-
     Theta1_grad = Delta1/X.shape[0]
     Theta2_grad = Delta2/X.shape[0]
 
@@ -243,9 +238,6 @@ def nnGrad(nn_params,input_layer_size,hidden_layer_size,num_labels,X,y,lamb):
     Theta2_grad[:,1:] = Theta2_grad[:,1:]+Theta2[:,1:]*lamb/X.shape[0]
     
     grad = np.r_[np.matrix(np.reshape(Theta1_grad,Theta1.shape[0]*Theta1.shape[1],order='F')).T,np.matrix(np.reshape(Theta2_grad,Theta2.shape[0]*Theta2.shape[1],order='F')).T]
-
-    t = timer() - t0
-    print("nnGrad e", t)
 
     return grad
 
