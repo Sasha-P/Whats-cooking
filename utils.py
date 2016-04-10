@@ -1,13 +1,24 @@
 import json
 import csv
 import time
+import random
 import numpy as np
 
 
-def load_train():
+def load_train(cuisine_interpretation):
+    """
+    Read and convert train dataset from data/train.json file
+
+    :param cuisine_interpretation: string of how to interpret cuisines input.
+    'number' - convert cuisines string to numbers
+    'vector' - convert cuisines string to vector of Os and 1s (ex. [0 0 0 1 0])
+    :return: list of str of unique cuisines, list of str of unique ingredients,
+    numpy array of train date, numpy array of train labels
+    """
+
     file_path = 'data/train.json'
-    training_file = open(file_path)
-    training_data = json.load(training_file)
+    with open(file_path) as training_file:
+        training_data = json.load(training_file)
 
     cuisine_list_loc = []
     ingredients_list_loc = []
@@ -31,7 +42,10 @@ def load_train():
     for dish in training_data:
         cuisine = dish['cuisine']
         ingredients = dish['ingredients']
-        cuisine_number = cuisine_to_number(cuisine_list_loc, cuisine)
+        if cuisine_interpretation == 'number':
+            cuisine_number = cuisine_to_number(cuisine_list_loc, cuisine)
+        if cuisine_interpretation == 'vector':
+            cuisine_number = cuisine_to_vector(cuisine_list_loc, cuisine)
         ingredients_vector = ingredients_to_vector(ingredients_list_loc, ingredients)
         y.append(cuisine_number)
         x.append(ingredients_vector)
@@ -41,10 +55,31 @@ def load_train():
     return cuisine_list_loc, ingredients_list_loc, np.array(x), np.array(y)
 
 
+def next_batch(list_object_a, list_object_b, count):
+    """
+    Generate random batch dataset of 'count' items from list_object_a and list_object_b
+
+    :param list_object_a: list of input object
+    :param list_object_b: list of input object
+    :param count: int number of dataset items
+    :return: list of slice of list_object_a, list of slice of list_object_b
+    """
+    indexes = []
+    for i in range(count):
+        indexes.append(random.randrange(count))
+    return list_object_a[indexes, :], list_object_b[indexes, :]
+
+
 def load_test(ingredients_list):
+    """
+    Read and convert test dataset from data/test.json file
+
+    :param ingredients_list: list of str of all ingredients
+    :return: numpy array of test date, int indexes of appropriate test items
+    """
     file_path = 'data/test.json'
-    test_file = open(file_path)
-    test_data = json.load(test_file)
+    with open(file_path) as test_file:
+        test_data = json.load(test_file)
 
     x = []
     ids = []
@@ -60,13 +95,29 @@ def load_test(ingredients_list):
     return np.array(x), ids
 
 
-def save_result(cuisine_list, prediction, ids):
-    with open('results/' + time.strftime("%Y.%m.%d_%H.%M.%S") + '_submission.csv', 'w', newline='') as csvfile:
+def save_result(suffix, cuisine_list, prediction, ids, cuisine_interpretation):
+    """
+    Convert results of prediction from number to cuisine and save to file
+
+    :param suffix: str suffix for file name
+    :param cuisine_list: list of str of all cuisines
+    :param prediction: prediction of model
+    :param ids: list of int of ids
+    :param cuisine_interpretation: string of how to interpret cuisines input.
+    'number' - convert cuisines string to numbers
+    'vector' - convert cuisines string to vector of Os and 1s (ex. [0 0 0 1 0])
+    :return: save ids and prediction to file
+    """
+    with open('results/' + suffix + '_' + time.strftime("%Y.%m.%d_%H.%M.%S") + '_submission.csv', 'w', newline='') as csvfile:
         spamwriter = csv.writer(csvfile, delimiter=',')
         spamwriter.writerow(['id', 'cuisine'])
         for i in range(len(ids)):
-            spamwriter.writerow([ids[i], number_to_cuisine(cuisine_list, prediction[i])])
-    pass
+            cuisine = ''
+            if cuisine_interpretation == 'number':
+                cuisine = number_to_cuisine(cuisine_list, prediction[i])
+            if cuisine_interpretation == 'vector':
+                cuisine = vector_to_cuisine(cuisine_list, prediction[i])
+            spamwriter.writerow([ids[i], cuisine])
 
 
 def cuisine_to_number(cuisine_list_loc, cuisine):

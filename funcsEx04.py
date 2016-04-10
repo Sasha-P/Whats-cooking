@@ -1,8 +1,8 @@
-from numba import vectorize, jit, cuda, float64, int64, autojit
-import time
+# original file https://raw.githubusercontent.com/royshoo/mlsn/master/python/funcsEx04.py
+# All rights belong to royshoo
+
 import numpy as np
 import matplotlib.pyplot as plt
-from timeit import default_timer as timer
 
 
 def cgbt2(theta,X,y,input_layer_size,hidden_layer_size,num_labels,lamb,alpha,beta,iter,tol):
@@ -19,21 +19,12 @@ def cgbt2(theta,X,y,input_layer_size,hidden_layer_size,num_labels,lamb,alpha,bet
         # tol: The procedure will break if the square of the Newton decrement is less than the threshold tol
 
     # Initialize the gradient
-    t0 = timer()
     dxPrev = -nnGrad(theta,input_layer_size,hidden_layer_size,num_labels,X,y,lamb)
-    t = timer() - t0
-    print("cgbt2 nnGrad",t)
-
     snPrev = dxPrev
     theta = np.matrix(theta).T
     # Iteration
     for i in range(iter):
-        t0 = timer()
         J,grad = nnCostFunction(theta,input_layer_size,hidden_layer_size,num_labels,X,y,lamb)
-        t = timer() - t0
-        print("cgbt2 nnCostFunction", t)
-
-        t0 = timer()
         dx = -grad
         if dx.T*dx < tol:
             print('Terminated due to stopping condition with iteration number',i)
@@ -77,10 +68,7 @@ def cgbt2(theta,X,y,input_layer_size,hidden_layer_size,num_labels,lamb,alpha,bet
         theta += t*sn
         snPrev = sn
         dxPrev = dx
-        print('Iteration',i+1,' | Cost:',costNew, time.strftime("%Y.%m.%d_%H:%M:%S"))
-
-        t = timer() - t0
-        print("cgbt2 for iteration", t)
+        print('Iteration',i+1,' | Cost:',costNew)
 
     return theta
 
@@ -135,7 +123,7 @@ def displayData(X,nameFig):
     # For now, only "quadratic" image
     example_width = np.round(np.sqrt(X.shape[1]))
     example_height = example_width
-    
+
     display_rows = np.floor(np.sqrt(X.shape[0]))
     display_cols = np.ceil(X.shape[0]/display_rows)
 
@@ -163,28 +151,18 @@ def displayData(X,nameFig):
     plt.show()
 
 
-# [float32[:, :](float32[:, :], float32[:, :])],
-# (float64, float64) -> float64
-# ['float32(float32, float32)', 'float64(float64, float64)'],
-# @vectorize(['float32(float32, float32)', 'float64(float64, float64)'], target='cuda')
-# @vectorize(['float32(float32, float32)', 'float64(float64, float64)'])
-# @jit(target='cuda')
-def mm(a, b):
-    # return a*b
-    return np.dot(a, b)
-    # return accelerate.cuda.blas.Blas.dot(a,b)
+def sigmoidGradient(z):
+    g = 1/(1+np.exp(-z))
+    return np.multiply(g,1-g)
 
 
-# @vectorize([float64[:](float64[:], int64, int64, int64, float64[:], int64[:], float64)], target='cuda')
-# @jit
 def nnCost(nn_params,input_layer_size,hidden_layer_size,num_labels,X,y,lamb):
     Theta1 = np.matrix(np.reshape(nn_params[:hidden_layer_size*(input_layer_size+1)],(hidden_layer_size,input_layer_size+1),order='F'))
     Theta2 = np.matrix(np.reshape(nn_params[hidden_layer_size*(input_layer_size+1):],(num_labels,hidden_layer_size+1),order='F'))
-    
-    a1 = np.c_[np.ones((X.shape[0],1)),X]
 
-    a2 = np.c_[np.ones((X.shape[0],1)),sigmoid(mm(a1, Theta1.T))]
-    a3 = sigmoid(mm(a2,Theta2.T))
+    a1 = np.c_[np.ones((X.shape[0],1)),X]
+    a2 = np.c_[np.ones((X.shape[0],1)),sigmoid(a1*Theta1.T)]
+    a3 = sigmoid(a2*Theta2.T)
 
     Y = np.zeros((X.shape[0],num_labels))
 
@@ -198,15 +176,13 @@ def nnCost(nn_params,input_layer_size,hidden_layer_size,num_labels,X,y,lamb):
     return J
 
 
-# @jit
 def nnGrad(nn_params,input_layer_size,hidden_layer_size,num_labels,X,y,lamb):
     Theta1 = np.matrix(np.reshape(nn_params[:hidden_layer_size*(input_layer_size+1)],(hidden_layer_size,input_layer_size+1),order='F'))
     Theta2 = np.matrix(np.reshape(nn_params[hidden_layer_size*(input_layer_size+1):],(num_labels,hidden_layer_size+1),order='F'))
-    
+
     Delta1 = np.zeros((hidden_layer_size,input_layer_size+1))
     Delta2 = np.zeros((num_labels,hidden_layer_size+1))
 
-    t0 = timer()
     for t in range(X.shape[0]):
         # 1
         a_1 = np.matrix(np.r_[np.ones(1),X[t,:].T]).T
@@ -221,37 +197,31 @@ def nnGrad(nn_params,input_layer_size,hidden_layer_size,num_labels,X,y,lamb):
         delta3 = a_3-yvec
 
         # 3
-        delta2 = np.multiply(mm(Theta2.T,delta3),np.matrix(np.r_[np.ones((1,1)),sigmoidGradient(z_2)]))
+        delta2 = np.multiply(Theta2.T*delta3,np.matrix(np.r_[np.ones((1,1)),sigmoidGradient(z_2)]))
 
         # 4
         delta2 = delta2[1:]
-        Delta2 += mm(delta3,a_2.T)
-        Delta1 += mm(delta2,a_1.T)
-
-    t = timer() - t0
-    print("nnGrad m", t)
+        Delta2 += delta3*a_2.T
+        Delta1 += delta2*a_1.T
 
     Theta1_grad = Delta1/X.shape[0]
     Theta2_grad = Delta2/X.shape[0]
 
     Theta1_grad[:,1:] = Theta1_grad[:,1:]+Theta1[:,1:]*lamb/X.shape[0]
     Theta2_grad[:,1:] = Theta2_grad[:,1:]+Theta2[:,1:]*lamb/X.shape[0]
-    
+
     grad = np.r_[np.matrix(np.reshape(Theta1_grad,Theta1.shape[0]*Theta1.shape[1],order='F')).T,np.matrix(np.reshape(Theta2_grad,Theta2.shape[0]*Theta2.shape[1],order='F')).T]
 
     return grad
 
 
-# @jit
 def nnCostFunction(nn_params,input_layer_size,hidden_layer_size,num_labels,X,y,lamb):
     Theta1 = np.matrix(np.reshape(nn_params[:hidden_layer_size*(input_layer_size+1)],(hidden_layer_size,input_layer_size+1),order='F'))
     Theta2 = np.matrix(np.reshape(nn_params[hidden_layer_size*(input_layer_size+1):],(num_labels,hidden_layer_size+1),order='F'))
-    
+
     a1 = np.c_[np.ones((X.shape[0],1)),X]
-    a2 = np.c_[np.ones((X.shape[0],1)),sigmoid(mm(a1, Theta1.T))]  # to long execution of a1*Theta1.T
-    a3 = sigmoid(mm(a2, Theta2.T))
-    # a2 = np.c_[np.ones((X.shape[0],1)),sigmoid(a1*Theta1.T)]
-    # a3 = sigmoid(a2*Theta2.T)
+    a2 = np.c_[np.ones((X.shape[0],1)),sigmoid(a1*Theta1.T)]
+    a3 = sigmoid(a2*Theta2.T)
 
     Y = np.zeros((X.shape[0],num_labels))
 
@@ -280,33 +250,26 @@ def nnCostFunction(nn_params,input_layer_size,hidden_layer_size,num_labels,X,y,l
         delta3 = a_3-yvec
 
         # 3
-        delta2 = np.multiply(mm(Theta2.T,delta3),np.matrix(np.r_[np.ones((1,1)),sigmoidGradient(z_2)]))
+        delta2 = np.multiply(Theta2.T*delta3,np.matrix(np.r_[np.ones((1,1)),sigmoidGradient(z_2)]))
 
         # 4
         delta2 = delta2[1:]
-        Delta2 += mm(delta3, a_2.T)
-        Delta1 += mm(delta2, a_1.T)
+        Delta2 += delta3*a_2.T
+        Delta1 += delta2*a_1.T
 
     Theta1_grad = Delta1/X.shape[0]
     Theta2_grad = Delta2/X.shape[0]
 
     Theta1_grad[:,1:] = Theta1_grad[:,1:]+Theta1[:,1:]*lamb/X.shape[0]
     Theta2_grad[:,1:] = Theta2_grad[:,1:]+Theta2[:,1:]*lamb/X.shape[0]
-    
+
     grad = np.r_[np.matrix(np.reshape(Theta1_grad,Theta1.shape[0]*Theta1.shape[1],order='F')).T,np.matrix(np.reshape(Theta2_grad,Theta2.shape[0]*Theta2.shape[1],order='F')).T]
 
-    return J, grad
+    return J,grad
 
 
-# @vectorize(target='cuda')
 def sigmoid(z):
     return 1/(1+np.exp(-z))
-
-
-# @vectorize(target='cuda')
-def sigmoidGradient(z):
-    g = 1/(1+np.exp(-z))
-    return np.multiply(g,1-g)
 
 
 def predict(Theta1,Theta2,X):
@@ -355,7 +318,7 @@ def checkNNGradients(lamb):
     Theta2 = debugInitializeWeights(num_labels,hidden_layer_size)
     X = debugInitializeWeights(m,input_layer_size-1)
     y = np.mod(np.linspace(1,m,m),num_labels)+1
-    
+
     nn_params = np.r_[np.matrix(np.reshape(Theta1, Theta1.shape[0]*Theta1.shape[1], order='F')).T,np.matrix(np.reshape(Theta2, Theta2.shape[0]*Theta2.shape[1], order='F')).T]
     cost,grad = nnCostFunction(nn_params,input_layer_size,hidden_layer_size,num_labels,X,y,lamb)
     numgrad = computeNumericalGradient(nn_params,input_layer_size,hidden_layer_size,num_labels,X,y,lamb)
