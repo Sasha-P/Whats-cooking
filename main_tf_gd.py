@@ -1,10 +1,10 @@
-from utils import *
+import utils as utl
 import tensorflow as tf
 import numpy as np
 
 
-cuisine_list, ingredients_list, xs, ys = load_train('vector')
-ts, ids = load_test(ingredients_list)
+cuisine_list, ingredients_list, xs, ys = utl.load_train('vector')
+ts, ids = utl.load_test(ingredients_list)
 
 cuisine_count = len(cuisine_list)
 ingredients_count = len(ingredients_list)
@@ -33,7 +33,7 @@ sess.run(init)
 for d in ['/cpu:0', '/gpu:0']:
     with tf.device(d):
         for i in range(100):
-            batch_xs, batch_ys = next_batch(xs, ys, 12000)
+            batch_xs, batch_ys = utl.next_batch(xs, ys, 12000)
             sess.run(train_step, feed_dict={x: batch_xs, y_: batch_ys})
 
 correct_prediction = tf.equal(tf.argmax(y, 1), tf.argmax(y_, 1))
@@ -42,4 +42,4 @@ accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 print(sess.run(accuracy, feed_dict={x: xs, y_: ys}))
 
 cls = sess.run(p, feed_dict={t: ts})
-save_result('tf_gd', cuisine_list, np.argmax(cls, axis=1).tolist(), ids, 'number')
+utl.save_result('tf_gd', cuisine_list, np.argmax(cls, axis=1).tolist(), ids, 'number')
